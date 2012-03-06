@@ -16,7 +16,7 @@ if (sizeof($domain_whitelist)) {
 if ($is_domain_valid) {
 	
     // params that shouldn't be passed along in request
-    $params_to_exclude = array('charles', 'provider', 'service');
+    $params_to_exclude = array("charles", "host", "path", "port", "provider", "service");
 
 	// get the URL to be proxied; is it a POST or a GET?
 	$is_post = array_key_exists('url', $_POST);
@@ -25,7 +25,10 @@ if ($is_domain_valid) {
 		$is_json = true;
 	}
 
-    $url = ($is_post) ? $_POST['url'] : $_GET['url'];
+    $host = ($is_post) ? $_POST['host'] : $_GET['host'];
+    $port = ($is_post) ? $_POST['port'] : $_GET['port'];
+    $path = ($is_post) ? $_POST['path'] : $_GET['path'];
+    $url = $host . ":" . $port . $path;
 	$headers = '';
 	$mime_type = '';
     $provider = "";
@@ -56,7 +59,7 @@ if ($is_domain_valid) {
 
 		$post_vars = '';
 		while ($element = current($_POST)) {
-            if (!in_array(key($_POST), $params_to_exclude)) {
+            if (in_array(key($_POST), $params_to_exclude) == false) {
                 $post_vars .= key($_POST).'='.$element.'&';
             }
             if (array_key_exists("provider", $_POST) && array_key_exists("service", $_POST)) {
@@ -72,7 +75,7 @@ if ($is_domain_valid) {
     } else {
         $query_string = array();
 		while ($element = current($_GET)) {
-            if ((key($_GET) != "url") && (in_array(key($_GET), $params_to_exclude) == false)) {
+            if (in_array(key($_GET), $params_to_exclude) == false) {
                 $query_string[key($_GET)] = $element;
             }
             if (key($_GET) == "provider") {
@@ -92,7 +95,8 @@ if ($is_domain_valid) {
         $session = curl_init($url);
 
         // use Charles as a local proxy?
-        if (($domain == "localhost" || $domain == "127.0.0.1") && (array_key_exists("charles", $_GET)) && ($_GET["charles"] == true)) {
+        if (($domain == "localhost" || $domain == "127.0.0.1") && (array_key_exists("charles", $_GET)) && ($_GET["charles"] == "true")) {
+            error_log("using charles as proxy");
             curl_setopt($session, CURLOPT_PROXY, "127.0.0.1");
             curl_setopt($session, CURLOPT_PROXYPORT, 8888);
         }
@@ -105,10 +109,14 @@ if ($is_domain_valid) {
 	curl_setopt($session, CURLOPT_MAXREDIRS, 2);
 	//curl_setopt($ch, CURLOPT_TIMEOUT, 4);
 	curl_setopt($session, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($session,CURLOPT_FAILONERROR,true);
 
-	// make the call
-	$response = curl_exec($session);
-    $headers = curl_getinfo($response);
+    // make the call
+    $response = curl_exec($session);
+    if ($response == false) {
+        error_log("curl error: " . curl_errno($session) . " - " . curl_error($session));
+    }
+    $headers = curl_getinfo($session);
 
 	if ($mime_type != "") {
 		// the web service returns XML; set the Content-Type appropriately
